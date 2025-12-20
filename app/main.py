@@ -1,4 +1,6 @@
 import logging
+from app.schemas import AnalyzeRequest, AnalyzeResponse
+
 from fastapi import FastAPI
 
 logging.basicConfig(
@@ -29,3 +31,13 @@ def get_service_info() -> dict:
 def health_check() -> dict:
     logger.info("Health check requested")
     return get_service_info()
+
+@app.post("/analyze", response_model=AnalyzeResponse)
+def analyze_content(payload: AnalyzeRequest) -> AnalyzeResponse:
+    text = payload.content
+
+    return AnalyzeResponse(
+        length=len(text),
+        preview=text[:30] + "..." if len(text) > 30 else text
+    )
+
