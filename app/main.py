@@ -1,5 +1,6 @@
 import logging
 from app.schemas import AnalyzeRequest, AnalyzeResponse
+from app.services import analyze_text
 
 from fastapi import FastAPI
 
@@ -26,6 +27,13 @@ def get_service_info() -> dict:
         "domain": "business-content-search"
     }
 
+def preprocess_text(text: str) -> str:
+    """
+    Pretend preprocessing step:
+    - strip whitespace
+    - normalize spaces
+    """
+    return " ".join(text.strip().split())
 
 @app.get("/health")
 def health_check() -> dict:
@@ -34,10 +42,11 @@ def health_check() -> dict:
 
 @app.post("/analyze", response_model=AnalyzeResponse)
 def analyze_content(payload: AnalyzeRequest) -> AnalyzeResponse:
-    text = payload.content
+    raw_text = payload.content
+    clean_text = preprocess_text(raw_text)
 
-    return AnalyzeResponse(
-        length=len(text),
-        preview=text[:30] + "..." if len(text) > 30 else text
-    )
+    result = analyze_text(clean_text)
+    return AnalyzeResponse(**result)
+
+
 
