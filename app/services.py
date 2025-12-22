@@ -10,17 +10,13 @@ def embed_text(text: str) -> list[float]:
 
 def analyze_text(text: str) -> dict:
     clean_text = preprocess_text(text)
-    vector = embed_text(clean_text)
-    hits = search_similar(clean_text, top_k=1)
-
-    top_hit = hits[0] if hits else None
 
     return {
-    "length": len(clean_text),
-    "preview": clean_text[:30] + "..." if len(clean_text) > 30 else clean_text,
-    "embedding_dim": len(vector),
-    "top_match": top_hit["text"] if top_hit else None
-}
+        "length": len(clean_text),
+        "preview": clean_text[:30] + "..." if len(clean_text) > 30 else clean_text,
+        "normalized_text": clean_text,
+    }
+
 
 VECTOR_STORE = [
     {
