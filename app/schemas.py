@@ -8,3 +8,5 @@ class AnalyzeRequest(BaseModel):
 class AnalyzeResponse(BaseModel):
     length: int
     preview: str
+    normalized_text: str
+
