@@ -21,6 +21,14 @@ from app.repositories.contents import (
     list_contents,
     semantic_search,
 )
+from fastapi.exceptions import RequestValidationError
+from sqlalchemy.exc import SQLAlchemyError
+
+from app.exceptions import (
+    validation_exception_handler,
+    sqlalchemy_exception_handler,
+    generic_exception_handler,
+)
 
 # -----------------------
 # Logging
@@ -38,6 +46,20 @@ logger = logging.getLogger(__name__)
 app = FastAPI(
     title="Content Search Backend",
     description="Backend service for semantic search over business content",
+)
+app.add_exception_handler(
+    RequestValidationError,
+    validation_exception_handler,
+)
+
+app.add_exception_handler(
+    SQLAlchemyError,
+    sqlalchemy_exception_handler,
+)
+
+app.add_exception_handler(
+    Exception,
+    generic_exception_handler,
 )
 
 # -----------------------
