@@ -1,4 +1,6 @@
 import logging
+from fastapi import Depends
+from app.auth import get_current_user
 
 from fastapi import FastAPI, HTTPException
 
@@ -86,7 +88,7 @@ def health_check() -> dict:
     return get_service_info()
 
 
-# -------- Debug / Analyze（不进 DB）--------
+# -------- Debug / Analyze--------
 @app.post("/analyze", response_model=AnalyzeResponse)
 def analyze_content(payload: AnalyzeRequest) -> AnalyzeResponse:
     clean_text = preprocess_text(payload.content)
@@ -94,12 +96,15 @@ def analyze_content(payload: AnalyzeRequest) -> AnalyzeResponse:
     return AnalyzeResponse(**result)
 
 
-# -------- Business APIs（Day4：写入 embedding）--------
+# -------- Business APIs--------
 @app.post("/contents", response_model=ContentOut)
-def create_content_api(payload: ContentCreate) -> ContentOut:
+def create_content_api(
+    payload: ContentCreate,
+    user=Depends(get_current_user),  
+) -> ContentOut:
     validate_body_not_empty(payload.body)
 
-    # Day4 核心：生成 embedding
+   
     embedding = embed_text(payload.body)
 
     db = SessionLocal()
@@ -114,7 +119,9 @@ def create_content_api(payload: ContentCreate) -> ContentOut:
         if not row:
             raise HTTPException(status_code=500, detail="failed to create content")
 
-        logger.info(f"Content created in DB: {row.id}")
+        logger.info(
+            f"Content created | id={row.id} | user={user.get('sub')}"
+        )
 
         return ContentOut(
             id=str(row.id),
@@ -124,6 +131,7 @@ def create_content_api(payload: ContentCreate) -> ContentOut:
         )
     finally:
         db.close()
+
 
 
 @app.get("/contents/{content_id}", response_model=ContentOut)
@@ -145,11 +153,14 @@ def get_content_api(content_id: str) -> ContentOut:
 
 
 @app.post("/search", response_model=SearchResponse)
-def search_contents(payload: SearchRequest) -> SearchResponse:
+def search_contents(
+    payload: SearchRequest,
+    user=Depends(get_current_user),  
+) -> SearchResponse:
     query = payload.query
     top_k = payload.top_k
 
-    # 1. query → embedding
+    
     query_embedding = embed_text(query)
 
     db = SessionLocal()
@@ -175,4 +186,3 @@ def search_contents(payload: SearchRequest) -> SearchResponse:
         )
 
     return SearchResponse(results=results)
-
