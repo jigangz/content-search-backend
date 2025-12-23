@@ -3,7 +3,8 @@ import logging
 from fastapi import FastAPI, HTTPException
 
 from app.schemas import AnalyzeRequest, AnalyzeResponse
-from app.services import analyze_text
+from app.services import analyze_text, embed_text
+
 from app.models import (
     ContentCreate,
     ContentOut,
@@ -18,6 +19,7 @@ from app.repositories.contents import (
     create_content,
     get_content,
     list_contents,
+    semantic_search,
 )
 
 # -----------------------
@@ -25,7 +27,7 @@ from app.repositories.contents import (
 # -----------------------
 logging.basicConfig(
     level=logging.INFO,
-    format="%(asctime)s | %(levelname)s | %(message)s"
+    format="%(asctime)s | %(levelname)s | %(message)s",
 )
 
 logger = logging.getLogger(__name__)
@@ -35,7 +37,7 @@ logger = logging.getLogger(__name__)
 # -----------------------
 app = FastAPI(
     title="Content Search Backend",
-    description="Backend service for semantic search over business content"
+    description="Backend service for semantic search over business content",
 )
 
 # -----------------------
@@ -52,6 +54,7 @@ def get_service_info() -> dict:
 def preprocess_text(text: str) -> str:
     return " ".join(text.strip().split())
 
+
 # -----------------------
 # Routes
 # -----------------------
@@ -61,7 +64,7 @@ def health_check() -> dict:
     return get_service_info()
 
 
-# -------- Debug / Analyze（保留，不进 DB）--------
+# -------- Debug / Analyze（不进 DB）--------
 @app.post("/analyze", response_model=AnalyzeResponse)
 def analyze_content(payload: AnalyzeRequest) -> AnalyzeResponse:
     clean_text = preprocess_text(payload.content)
@@ -69,10 +72,13 @@ def analyze_content(payload: AnalyzeRequest) -> AnalyzeResponse:
     return AnalyzeResponse(**result)
 
 
-# -------- Business APIs（Day3：走数据库）--------
+# -------- Business APIs（Day4：写入 embedding）--------
 @app.post("/contents", response_model=ContentOut)
 def create_content_api(payload: ContentCreate) -> ContentOut:
     validate_body_not_empty(payload.body)
+
+    # Day4 核心：生成 embedding
+    embedding = embed_text(payload.body)
 
     db = SessionLocal()
     try:
@@ -80,6 +86,7 @@ def create_content_api(payload: ContentCreate) -> ContentOut:
             db=db,
             title=payload.title,
             body=payload.body.strip(),
+            embedding=embedding,
         )
 
         if not row:
@@ -117,30 +124,33 @@ def get_content_api(content_id: str) -> ContentOut:
 
 @app.post("/search", response_model=SearchResponse)
 def search_contents(payload: SearchRequest) -> SearchResponse:
-    """
-    Day3: 仍然是 mock search
-    Day5: 这里会整体换成 embedding + pgvector
-    """
-    query = payload.query.lower()
+    query = payload.query
     top_k = payload.top_k
+
+    # 1. query → embedding
+    query_embedding = embed_text(query)
 
     db = SessionLocal()
     try:
-        rows = list_contents(db=db)
+        rows = semantic_search(
+            db=db,
+            query_embedding=query_embedding,
+            top_k=top_k,
+        )
     finally:
         db.close()
 
     results: list[SearchHit] = []
 
     for row in rows:
-        if query in row.body.lower():
-            results.append(
-                SearchHit(
-                    id=str(row.id),
-                    title=row.title,
-                    body=row.body,
-                    score=1.0,
-                )
+        results.append(
+            SearchHit(
+                id=str(row.id),
+                title=row.title,
+                body=row.body,
+                score=float(row.score),
             )
+        )
 
-    return SearchResponse(results=results[:top_k])
+    return SearchResponse(results=results)
+

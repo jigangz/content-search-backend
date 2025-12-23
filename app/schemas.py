@@ -10,3 +10,8 @@ class AnalyzeResponse(BaseModel):
     preview: str
     normalized_text: str
 
+class SearchHit(BaseModel):
+    id: str
+    title: str | None
+    body: str
+    score: float
